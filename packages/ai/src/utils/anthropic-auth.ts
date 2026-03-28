@@ -9,7 +9,10 @@
 import { $env } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
 import { type AuthCredential, AuthCredentialStore } from "../auth-storage";
-import { buildAnthropicHeaders as buildProviderAnthropicHeaders } from "../providers/anthropic";
+import {
+	buildAnthropicHeaders as buildProviderAnthropicHeaders,
+	normalizeAnthropicBaseUrl,
+} from "../providers/anthropic";
 import { getEnvApiKey } from "../stream";
 
 /** Auth configuration for Anthropic */
@@ -151,6 +154,7 @@ export function buildAnthropicSearchHeaders(auth: AnthropicAuthConfig): Record<s
  * @returns The complete API URL with beta query parameter
  */
 export function buildAnthropicUrl(auth: AnthropicAuthConfig): string {
-	const base = `${auth.baseUrl}/v1/messages`;
+	const normalizedBaseUrl = normalizeAnthropicBaseUrl(auth.baseUrl);
+	const base = `${normalizedBaseUrl}/v1/messages`;
 	return `${base}?beta=true`;
 }

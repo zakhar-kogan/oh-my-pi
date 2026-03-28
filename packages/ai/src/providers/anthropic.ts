@@ -42,6 +42,13 @@ export type AnthropicHeaderOptions = {
 	modelHeaders?: Record<string, string>;
 };
 
+export function normalizeAnthropicBaseUrl(baseUrl?: string): string | undefined {
+	if (!baseUrl) {
+		return baseUrl;
+	}
+	return baseUrl.endsWith("/v1") ? baseUrl.slice(0, -3) : baseUrl;
+}
+
 // Build deduplicated beta header string
 export function buildBetaHeader(baseBetas: string[], extraBetas: string[]): string {
 	const seen = new Set<string>();
@@ -354,12 +361,13 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 			});
 			const params = buildParams(model, context, isOAuthToken, options);
 			options?.onPayload?.(params);
+			const normalizedBaseUrl = normalizeAnthropicBaseUrl(model.baseUrl);
 			rawRequestDump = {
 				provider: model.provider,
 				api: output.api,
 				model: model.id,
 				method: "POST",
-				url: `${model.baseUrl ?? "https://api.anthropic.com"}/v1/messages`,
+				url: `${normalizedBaseUrl ?? "https://api.anthropic.com"}/v1/messages`,
 				body: params,
 			};
 
@@ -397,7 +405,11 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 									index: event.index,
 								};
 								output.content.push(block);
-								stream.push({ type: "text_start", contentIndex: output.content.length - 1, partial: output });
+								stream.push({
+									type: "text_start",
+									contentIndex: output.content.length - 1,
+									partial: output,
+								});
 							} else if (event.content_block.type === "thinking") {
 								const block: Block = {
 									type: "thinking",
@@ -669,6 +681,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		isOAuth,
 	} = args;
 	const oauthToken = isOAuth ?? isAnthropicOAuthToken(apiKey);
+	const normalizedBaseUrl = normalizeAnthropicBaseUrl(model.baseUrl);
 
 	if (model.provider === "github-copilot") {
 		const betaFeatures = [...extraBetas];
@@ -691,7 +704,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 			isOAuthToken: false,
 			apiKey: null,
 			authToken: apiKey,
-			baseURL: model.baseUrl,
+			baseURL: normalizedBaseUrl,
 			maxRetries: 5,
 			dangerouslyAllowBrowser: true,
 			defaultHeaders,
@@ -705,7 +718,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 
 	const defaultHeaders = buildAnthropicHeaders({
 		apiKey,
-		baseUrl: model.baseUrl,
+		baseUrl: normalizedBaseUrl,
 		isOAuth: oauthToken,
 		extraBetas: betaFeatures,
 		stream,
@@ -716,7 +729,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		isOAuthToken: oauthToken,
 		apiKey: oauthToken ? null : apiKey,
 		authToken: oauthToken ? apiKey : undefined,
-		baseURL: model.baseUrl,
+		baseURL: normalizedBaseUrl,
 		maxRetries: 5,
 		dangerouslyAllowBrowser: true,
 		defaultHeaders,
@@ -837,7 +850,11 @@ function applyPromptCaching(params: MessageCreateParamsStreaming, cacheControl?:
 		if (penultimateUser) {
 			if (typeof penultimateUser.content === "string") {
 				penultimateUser.content = [
-					{ type: "text", text: penultimateUser.content, cache_control: cacheControl },
+					{
+						type: "text",
+						text: penultimateUser.content,
+						cache_control: cacheControl,
+					},
 				] as any;
 				cacheBreakpointsUsed++;
 			} else if (Array.isArray(penultimateUser.content) && penultimateUser.content.length > 0) {
@@ -942,7 +959,10 @@ function buildParams(
 		if (typeof options.toolChoice === "string") {
 			params.tool_choice = { type: options.toolChoice };
 		} else if (isOAuthToken && options.toolChoice.name) {
-			params.tool_choice = { ...options.toolChoice, name: applyClaudeToolPrefix(options.toolChoice.name) };
+			params.tool_choice = {
+				...options.toolChoice,
+				name: applyClaudeToolPrefix(options.toolChoice.name),
+			};
 		} else {
 			params.tool_choice = options.toolChoice;
 		}
